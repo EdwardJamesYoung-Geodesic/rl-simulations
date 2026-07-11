@@ -149,4 +149,6 @@ $$ \nabla J = \sum_i \pi_i (R_i - E[R]) \boldsymbol{e}_i $$
 
 ## Appendix B. Interpreting probability simplexes 
 
-INCLUDE INTERACTIVE WIDGET HERE. 
+[![The probability simplex: each vertex is a pure policy and each probability is the point's perpendicular distance to the opposite edge](widgets/preview/simplex-explainer.png)](https://edwardjamesyoung-geodesic.github.io/rl-simulations/widgets/dist/simplex-explainer.html)
+
+*▶ [**Open the interactive version.**](https://edwardjamesyoung-geodesic.github.io/rl-simulations/widgets/dist/simplex-explainer.html) Drag the point anywhere inside the triangle: each vertex is a pure (one-hot) policy, and each probability $\pi_i$ is read off as the perpendicular distance from the point to the edge opposite vertex $i$.* 
