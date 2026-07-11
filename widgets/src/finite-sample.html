@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Finite-sample RL drift</title>
+    <style>
+      html, body { margin: 0; background: #ffffff; }
+      #wrap {
+        max-width: 500px;
+        margin: 0 auto;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: #222;
+      }
+      #fig svg { display: block; width: 100%; height: auto; touch-action: none; cursor: grab; }
+      #fig svg.dragging { cursor: grabbing; }
+      #hint { font-size: 12.5px; color: #6b6b6b; text-align: center; margin: 2px 0 10px; }
+      #controls {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 9px 12px;
+        align-items: center;
+        padding: 4px 8px 2px;
+      }
+      #controls label { font-size: 13px; font-weight: 600; white-space: nowrap; }
+      #controls output { font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; min-width: 2.6em; }
+      #controls input[type="range"] { width: 100%; accent-color: #0072B2; }
+      #rewards {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 8px 2px; font-size: 13px; font-weight: 600;
+      }
+      #rewards .rboxes { display: flex; gap: 10px; }
+      #rewards .rboxes label { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; }
+      #rewards input[type="number"] {
+        width: 3.4em; font: 13px system-ui, sans-serif;
+        padding: 3px 4px; border: 1px solid #cfcfcf; border-radius: 5px;
+      }
+      #bar { display: flex; justify-content: flex-end; padding: 8px; }
+      #replay {
+        font: 600 13px system-ui, sans-serif;
+        color: #ffffff; background: #0072B2; border: none;
+        border-radius: 6px; padding: 6px 14px; cursor: pointer;
+      }
+      #replay:hover { background: #005b8f; }
+      #replay:focus-visible { outline: 2px solid #0072B2; outline-offset: 2px; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <div id="fig"></div>
+      <div id="hint">Drag the point to choose where training starts.</div>
+      <div id="controls">
+        <label for="c-G">Group size <i>G</i></label>
+        <input id="c-G" type="range" min="2" max="64" step="1" value="8" />
+        <output id="v-G">8</output>
+
+        <label for="c-eta">Learning rate <i>η</i></label>
+        <input id="c-eta" type="range" min="0.05" max="2" step="0.05" value="1.2" />
+        <output id="v-eta">1.20</output>
+
+        <label for="c-steps">Steps</label>
+        <input id="c-steps" type="range" min="5" max="200" step="1" value="25" />
+        <output id="v-steps">25</output>
+
+        <label for="c-N">Rollouts</label>
+        <input id="c-N" type="range" min="1" max="50" step="1" value="20" />
+        <output id="v-N">20</output>
+      </div>
+      <div id="rewards">
+        <span>Rewards</span>
+        <div class="rboxes">
+          <label>R₁ <input id="c-R1" type="number" step="0.1" min="-5" max="5" value="0" /></label>
+          <label>R₂ <input id="c-R2" type="number" step="0.1" min="-5" max="5" value="1" /></label>
+          <label>R₃ <input id="c-R3" type="number" step="0.1" min="-5" max="5" value="1" /></label>
+        </div>
+      </div>
+      <div id="bar"><button id="replay" type="button">Replay</button></div>
+    </div>
+
+    <script id="rl-core">/*__CORE__*/</script>
+    <script id="rl-render">/*__RENDER__*/</script>
+    <script id="rl-data">
+      const RL_FIXTURES = __FIXTURES__;
+      const RL_PALETTE = __PALETTE__;
+    </script>
+    <script id="rl-widget">
+      (function () {
+        "use strict";
+        const Rend = RLRender, D = RLDyn, P = RL_PALETTE;
+
+        // silent JS<->Python parity guard (logs to console only)
+        D.selfTest(RL_FIXTURES);
+
+        const TIME = P.sequential.time;          // light orange -> dark red ramp
+        const BLUE = P.wong.blue;                // deterministic full-gradient path
+        const SUBS = ["₁", "₂", "₃"];
+
+        // ---- adjustable params + state --------------------------------------
+        let G = 8, eta = 1.2, steps = 25, N = 20;
+        let REW = [0.0, 1.0, 1.0];
+        let startPi = [0.9, 0.05, 0.05];
+
+        // ---- colour ramp (mirrors rl_dynamics.palette.ramp) -----------------
+        function hexToRgb(h) {
+          h = h.replace("#", "");
+          return [0, 2, 4].map((i) => parseInt(h.substr(i, 2), 16));
+        }
+        function rgbToHex(c) {
+          return "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+        }
+        function ramp(stops, t) {
+          t = Math.min(1, Math.max(0, t));
+          const n = stops.length - 1, f = t * n;
+          const i = Math.min(n - 1, Math.floor(f)), u = f - i;
+          const a = hexToRgb(stops[i]), b = hexToRgb(stops[i + 1]);
+          return rgbToHex(a.map((av, k) => av + (b[k] - av) * u));
+        }
+        function fmtNum(x) { return isFinite(x) ? String(Math.round(x * 100) / 100) : "0"; }
+
+        // ---- geometry / projection ------------------------------------------
+        const BOX = 500, PAD = 60;
+        const scale = BOX - 2 * PAD;
+        const triH = D.H * scale;
+        const ox = PAD;
+        const oy = PAD + (BOX - 2 * PAD - triH) / 2;
+        const proj = (p) => [ox + p[0] * scale, oy + (D.H - p[1]) * scale];
+        const unproj = (px, py) => [(px - ox) / scale, D.H - (py - oy) / scale];
+        const Vpix = D.V.map(proj);
+
+        const stage = document.getElementById("fig");
+        const el = (id) => document.getElementById(id);
+
+        // ---- static shell + vertex labels -----------------------------------
+        function labelsSVG() {
+          const off = [ [0, -16], [-6, 24], [6, 24] ];
+          let s = "";
+          for (let i = 0; i < 3; i++) {
+            s += Rend.text(Vpix[i][0] + off[i][0], Vpix[i][1] + off[i][1],
+              "R" + SUBS[i] + " = " + fmtNum(REW[i]), {
+              fill: P.ink.secondary, font_size: 13, font_weight: 600,
+              text_anchor: "middle", dominant_baseline: "middle",
+            });
+          }
+          return s;
+        }
+        function updateLabels() { el("labels").innerHTML = labelsSVG(); }
+
+        function shell() {
+          const tri = Rend.polygon(Vpix, {
+            fill: P.surface, stroke: P.structure.edge, stroke_width: 1.75,
+            stroke_linejoin: "round",
+          });
+          stage.innerHTML =
+            '<svg viewBox="0 0 ' + BOX + " " + BOX +
+            '" xmlns="http://www.w3.org/2000/svg" role="img" ' +
+            'aria-label="finite-sample RL rollouts on the probability simplex">' +
+            tri + '<g id="labels">' + labelsSVG() + '</g>' +
+            '<g id="traj"></g><g id="det"></g><g id="marker"></g></svg>';
+          drawMarker();
+        }
+
+        function drawMarker() {
+          const Pp = proj(D.toXY(startPi));
+          el("marker").innerHTML =
+            Rend.circle(Pp[0], Pp[1], 8.5, { fill: "none", stroke: P.surface, stroke_width: 3.5 }) +
+            Rend.circle(Pp[0], Pp[1], 6.5, { fill: ramp(TIME, 0), stroke: P.ink.primary, stroke_width: 1.4 });
+        }
+
+        // ---- rollouts -> pixel points per step ------------------------------
+        function sampleCat(pi) {
+          const u = Math.random();
+          let c = 0;
+          for (let i = 0; i < pi.length; i++) { c += pi[i]; if (u < c) return i; }
+          return pi.length - 1;
+        }
+        function rollout() {                       // one stochastic RLOO run
+          let L = startPi.map((p) => Math.log(Math.max(p, 1e-12)));
+          const pix = [proj(D.toXY(D.softmax(L)))];
+          for (let t = 0; t < steps; t++) {
+            const pi = D.softmax(L);
+            const counts = [0, 0, 0];
+            for (let g = 0; g < G; g++) counts[sampleCat(pi)]++;
+            const { ghat } = D.rlooFromCounts(counts, REW);
+            L = D.logitStep(L, ghat, eta, null);
+            pix.push(proj(D.toXY(D.softmax(L))));
+          }
+          return pix;
+        }
+        function detPath() {                        // deterministic full-gradient run
+          let L = startPi.map((p) => Math.log(Math.max(p, 1e-12)));
+          const pix = [proj(D.toXY(D.softmax(L)))];
+          for (let t = 0; t < steps; t++) {
+            const pi = D.softmax(L);
+            L = D.logitStep(L, D.fullGradient(pi, REW), eta, null);
+            pix.push(proj(D.toXY(D.softmax(L))));
+          }
+          return pix;
+        }
+
+        // ---- animate rollouts + deterministic path growing together --------
+        let raf = null;
+        function stopAnim() { if (raf) { cancelAnimationFrame(raf); raf = null; } }
+        function run() {
+          stopAnim();
+          const trajG = el("traj"), detG = el("det");
+          trajG.innerHTML = ""; detG.innerHTML = "";
+          const paths = [];
+          for (let i = 0; i < N; i++) paths.push(rollout());
+          const det = detPath();
+          const inc = Math.max(1, Math.round(steps / 90));
+          let shown = 0;
+          function frame() {
+            const next = Math.min(steps, shown + inc);
+            let buf = "";
+            for (let i = 0; i < N; i++) {
+              const p = paths[i];
+              for (let s = shown; s < next; s++) {
+                buf += Rend.line(p[s][0], p[s][1], p[s + 1][0], p[s + 1][1], {
+                  stroke: ramp(TIME, (s + 0.5) / steps),
+                  stroke_width: 1.8, stroke_linecap: "round", opacity: 0.82,
+                });
+              }
+            }
+            trajG.insertAdjacentHTML("beforeend", buf);
+            detG.innerHTML = Rend.polyline(det.slice(0, next + 1), {
+              stroke: BLUE, stroke_width: 3, stroke_linecap: "round", stroke_linejoin: "round",
+            });
+            shown = next;
+            raf = shown < steps ? requestAnimationFrame(frame) : null;
+          }
+          frame();
+        }
+
+        // ---- dragging the start point ---------------------------------------
+        let dragging = false;
+        const svgEl = () => stage.querySelector("svg");
+        function toBox(ev) {
+          const rect = svgEl().getBoundingClientRect();
+          const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+          const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
+          return [(cx - rect.left) * (BOX / rect.width), (cy - rect.top) * (BOX / rect.height)];
+        }
+        function setFrom(ev) {
+          const [px, py] = toBox(ev);
+          startPi = D.clampToSimplex(D.fromXY(...unproj(px, py)));
+          drawMarker();
+        }
+        stage.addEventListener("pointerdown", (ev) => {
+          dragging = true;
+          svgEl().classList.add("dragging");
+          stopAnim();
+          el("traj").innerHTML = ""; el("det").innerHTML = "";   // clear while repositioning
+          setFrom(ev);
+          ev.preventDefault();
+        });
+        window.addEventListener("pointermove", (ev) => { if (dragging) { setFrom(ev); ev.preventDefault(); } });
+        window.addEventListener("pointerup", () => {
+          if (!dragging) return;
+          dragging = false;
+          const e = svgEl(); if (e) e.classList.remove("dragging");
+          run();                                                 // rollouts appear on release
+        });
+
+        // ---- controls -------------------------------------------------------
+        const sliders = [
+          ["c-G", "v-G", (v) => { G = +v; return String(G); }],
+          ["c-eta", "v-eta", (v) => { eta = +v; return eta.toFixed(2); }],
+          ["c-steps", "v-steps", (v) => { steps = +v; return String(steps); }],
+          ["c-N", "v-N", (v) => { N = +v; return String(N); }],
+        ];
+        for (const [inId, outId, apply] of sliders) {
+          const input = el(inId), out = el(outId);
+          input.addEventListener("input", () => { out.textContent = apply(input.value); run(); });
+        }
+        [["c-R1", 0], ["c-R2", 1], ["c-R3", 2]].forEach(([id, idx]) => {
+          el(id).addEventListener("input", () => {
+            const v = parseFloat(el(id).value);
+            REW[idx] = isFinite(v) ? v : 0;
+            updateLabels();
+            run();
+          });
+        });
+        el("replay").addEventListener("click", run);
+
+        // ---- go -------------------------------------------------------------
+        shell();
+        run();
+      })();
+    </script>
+  </body>
+</html>

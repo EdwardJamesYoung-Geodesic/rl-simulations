@@ -1,0 +1,65 @@
+# Colour palette for rl-dynamics figures and widgets.
+#
+# Data marks use the Wong (2011) colourblind-safe qualitative palette
+# (B. Wong, "Points of view: Color blindness", Nature Methods 8, 441, 2011).
+# Chrome (background, ink, gridlines) stays neutral gray — standard practice,
+# since Wong is a categorical *data* palette, not a full design system.
+#
+# Static figures are designed for a LIGHT background only. Widgets may adapt
+# this to a dark theme at render time.
+#
+# Usage rule: yellow (#F0E442) and, to a lesser degree, sky_blue (#56B4E9)
+# have weak contrast on white. Use them only as large fills or paired with a
+# text label — never as a thin line or small marker.
+
+# --- Wong qualitative palette (named) ---
+wong:
+  black: "#000000"
+  orange: "#E69F00"
+  sky_blue: "#56B4E9"
+  green: "#009E73"        # "bluish green"
+  yellow: "#F0E442"
+  blue: "#0072B2"
+  vermillion: "#D55E00"
+  purple: "#CC79A7"       # "reddish purple"
+
+# --- chrome / ink (neutral gray, light background) ---
+surface: "#ffffff"        # figure background
+ink:
+  primary: "#000000"      # titles, key labels
+  secondary: "#4d4d4d"    # axis labels, annotations
+  muted: "#8a8a8a"        # de-emphasised text
+structure:
+  grid: "#e6e6e6"         # internal gridlines
+  edge: "#bdbdbd"         # triangle / axis outline
+  field: "#9e9e9e"        # vector-field arrows (drawn faint)
+
+# --- roles for data marks (all drawn from `wong` above) ---
+# Fixed categorical order for actions/series: strong-separation hues first.
+categorical:
+  - "#0072B2"   # blue
+  - "#D55E00"   # vermillion
+  - "#009E73"   # green
+  - "#E69F00"   # orange
+  - "#CC79A7"   # purple
+  - "#56B4E9"   # sky_blue
+  - "#F0E442"   # yellow (fills/labels only)
+  - "#000000"   # black
+accent:
+  primary: "#0072B2"      # blue — main focal marks
+  secondary: "#D55E00"    # vermillion — reserved for two-way contrast only
+highlight: "#E69F00"      # orange — annotations / manifolds, always with a text label
+
+# --- typography ---
+# Serif stack: Palatino where available, then the open "Average" webfont
+# (a Palatino-like substitute), then broadly-available serif fallbacks.
+font:
+  serif: "Palatino, 'Palatino Linotype', 'Average', 'Book Antiqua', Georgia, serif"
+
+# --- sequential ramps (interpolated; not part of Wong, which is categorical) ---
+sequential:
+  # encodes time along deterministic trajectories: light orange (early) -> dark red (late)
+  time:
+    - "#F6B14A"
+    - "#D1461E"
+    - "#7A0E0E"

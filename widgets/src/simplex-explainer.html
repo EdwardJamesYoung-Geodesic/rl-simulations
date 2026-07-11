@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reading a probability simplex</title>
+    <style>
+      html, body { margin: 0; background: #ffffff; }
+      #fig {
+        max-width: 480px;
+        margin: 0 auto;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      #fig svg { display: block; width: 100%; height: auto; touch-action: none; cursor: grab; }
+      #fig svg.dragging { cursor: grabbing; }
+    </style>
+  </head>
+  <body>
+    <div id="fig"></div>
+
+    <script id="rl-core">/*__CORE__*/</script>
+    <script id="rl-render">/*__RENDER__*/</script>
+    <script id="rl-data">
+      const RL_FIXTURES = __FIXTURES__;
+      const RL_PALETTE = __PALETTE__;
+    </script>
+    <script id="rl-widget">
+      (function () {
+        "use strict";
+        const R = RLRender, D = RLDyn, P = RL_PALETTE;
+        const SUB = ["₁", "₂", "₃"];
+
+        // silent JS<->Python parity guard (logs to console only)
+        D.selfTest(RL_FIXTURES);
+
+        // light-only chrome; data colours are the Wong palette
+        const T = { surface: P.surface, ink: P.ink.primary, edge: P.structure.edge };
+        const CAT = P.categorical;
+
+        // project simplex coords -> pixels in a BOX x BOX viewBox
+        const BOX = 480, PAD = 60;
+        const scale = BOX - 2 * PAD;
+        const triH = D.H * scale;
+        const ox = PAD;
+        const oy = PAD + (BOX - 2 * PAD - triH) / 2;
+        const proj = (p) => [ox + p[0] * scale, oy + (D.H - p[1]) * scale];
+        const unproj = (px, py) => [(px - ox) / scale, D.H - (py - oy) / scale];
+        const Vpix = D.V.map(proj);
+
+        let pi = [0.5, 0.3, 0.2];
+
+        function render() {
+          let s = "";
+
+          // triangle outline
+          s += R.polygon(Vpix, {
+            fill: T.surface, stroke: T.edge, stroke_width: 1.75,
+            stroke_linejoin: "round",
+          });
+
+          const Pp = proj(D.toXY(pi));
+
+          // perpendicular drop-lines to the edge opposite each vertex
+          for (let i = 0; i < 3; i++) {
+            const [A, B] = D.oppositeEdge(i);
+            const Fp = proj(D.footOnEdge(D.toXY(pi), A, B));
+            s += R.line(Pp[0], Pp[1], Fp[0], Fp[1], {
+              stroke: CAT[i], stroke_width: 2, stroke_linecap: "round",
+            });
+            s += R.circle(Fp[0], Fp[1], 2.6, { fill: CAT[i] });
+            const mx = (Pp[0] + Fp[0]) / 2, my = (Pp[1] + Fp[1]) / 2;
+            const dx = Fp[0] - Pp[0], dy = Fp[1] - Pp[1];
+            const L = Math.hypot(dx, dy) || 1;
+            const nx = (-dy / L) * 15, ny = (dx / L) * 15;
+            s += R.text(mx + nx, my + ny, "π" + SUB[i] + " = " + pi[i].toFixed(2), {
+              fill: CAT[i], font_size: 12.5, font_weight: 600,
+              text_anchor: "middle", dominant_baseline: "middle",
+              style: "paint-order:stroke;stroke:" + T.surface + ";stroke-width:3px",
+            });
+          }
+
+          // vertex labels (pure one-hot policies)
+          const vlabels = ["(1, 0, 0)", "(0, 1, 0)", "(0, 0, 1)"];
+          const off = [ [0, -16], [-14, 20], [14, 20] ];
+          for (let i = 0; i < 3; i++) {
+            s += R.text(Vpix[i][0] + off[i][0], Vpix[i][1] + off[i][1], vlabels[i], {
+              fill: CAT[i], font_size: 12, font_weight: 600,
+              text_anchor: "middle", dominant_baseline: "middle",
+            });
+          }
+
+          // draggable point
+          s += R.circle(Pp[0], Pp[1], 8.5, { fill: "none", stroke: T.surface, stroke_width: 3.5 });
+          s += R.circle(Pp[0], Pp[1], 7, { fill: T.ink });
+
+          document.getElementById("fig").innerHTML =
+            '<svg viewBox="0 0 ' + BOX + " " + BOX + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="probability simplex">' +
+            s + "</svg>";
+        }
+
+        // dragging
+        const stage = document.getElementById("fig");
+        let dragging = false;
+        const svgEl = () => stage.querySelector("svg");
+        function toBox(ev) {
+          const rect = svgEl().getBoundingClientRect();
+          const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+          const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
+          return [(cx - rect.left) * (BOX / rect.width), (cy - rect.top) * (BOX / rect.height)];
+        }
+        function setFrom(ev) {
+          const [px, py] = toBox(ev);
+          pi = D.clampToSimplex(D.fromXY(...unproj(px, py)));
+          render();
+        }
+        stage.addEventListener("pointerdown", (ev) => { dragging = true; svgEl().classList.add("dragging"); setFrom(ev); ev.preventDefault(); });
+        window.addEventListener("pointermove", (ev) => { if (dragging) { setFrom(ev); ev.preventDefault(); } });
+        window.addEventListener("pointerup", () => { dragging = false; const e = svgEl(); if (e) e.classList.remove("dragging"); });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>

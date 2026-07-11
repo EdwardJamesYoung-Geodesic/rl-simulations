@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# OS / editor
+.DS_Store
+
+# scratch rasterisation artifacts (qlmanage previews)
+*.pad.svg
+*.pad.svg.png
+
+# shelved / parked exploration (recoverable, not published)
+archive/
