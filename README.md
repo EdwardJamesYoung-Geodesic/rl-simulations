@@ -1,10 +1,10 @@
 # rl-dynamics
 
+> 📄 **[Read the full write-up →](./write-up.md)**
+
 Simulations, figures, and interactive widgets for a blog post on **a toy model of
 finite-sample RL learning dynamics** — the linear-softmax policy, RLOO updates,
 the effect of initialisation, equal-reward policy drift, and Gram-matrix coupling.
-
-The post draft lives in [`write-up.md`](./write-up.md).
 
 ## What's here
 
@@ -39,4 +39,4 @@ Static figures are designed for a **light background**; interactive widgets may 
 
 ## License
 
-TODO.
+Released under the [MIT License](./LICENSE) © 2026 Edward Young.

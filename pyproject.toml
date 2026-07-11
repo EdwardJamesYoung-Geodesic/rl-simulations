@@ -3,6 +3,8 @@ name = "rl-dynamics"
 version = "0.1.0"
 description = "A toy model of finite-sample RL learning dynamics: simulation machinery and visualisations."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.4.6",
