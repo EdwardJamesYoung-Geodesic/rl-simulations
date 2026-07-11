@@ -15,3 +15,6 @@ __pycache__/
 
 # shelved / parked exploration (recoverable, not published)
 archive/
+
+# widget preview (keep the .gif, ignore the review still)
+widgets/preview/*-still.png

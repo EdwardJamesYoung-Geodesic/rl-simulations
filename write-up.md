@@ -70,7 +70,9 @@ There are some important differences in the stochastic case. Firstly, some initi
 
 To get further intuitions about the finite sample case, we invite you to play around with the widget below, which simulates finite sample rollouts. 
 
-[INSERT HTML WIDGET HERE] 
+[![Animated preview of the finite-sample drift widget: rollouts fanning out from the start point](widgets/preview/finite-sample.gif)](https://edwardjamesyoung-geodesic.github.io/rl-simulations/widgets/dist/finite-sample.html)
+
+*▶ [**Open the interactive version.**](https://edwardjamesyoung-geodesic.github.io/rl-simulations/widgets/dist/finite-sample.html) Drag the start point around the simplex, edit the rewards, and vary $G$, $\eta$, the number of steps, and the number of rollouts. The blue line is the deterministic full-gradient path.*
 
 ## Learning when reward leaves aspects of behaviour untethered
 
