@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cognition: ID vs OOD</title>
+    <style>
+      html, body { margin: 0; background: #ffffff; }
+      #wrap {
+        max-width: 660px; margin: 0 auto; color: #222;
+        font-family: Palatino, 'Palatino Linotype', 'Average', 'Book Antiqua', Georgia, serif;
+      }
+      #fig svg { display: block; width: 100%; height: auto; touch-action: none; }
+      #hint { font-size: 12.5px; color: #6b6b6b; text-align: center; margin: 2px 8px 12px; }
+      #matrices { display: flex; gap: 26px; justify-content: center; flex-wrap: wrap; padding: 0 8px 6px; }
+      .mtx { font-size: 13px; }
+      .mlabel { font-weight: 600; margin-bottom: 5px; text-align: center; }
+      .mlabel span { font-weight: 400; color: #6b6b6b; }
+      table { border-collapse: collapse; }
+      th, td { padding: 2px 5px; text-align: center; font-variant-numeric: tabular-nums; }
+      th { font-weight: 600; color: #4d4d4d; font-size: 12px; }
+      td.rlab { font-weight: 600; color: #4d4d4d; }
+      input[type="number"] {
+        width: 3.1em; font: 13px Palatino, 'Palatino Linotype', 'Average', 'Book Antiqua', Georgia, serif; text-align: center;
+        padding: 2px 3px; border: 1px solid #cfcfcf; border-radius: 5px;
+      }
+      td.derived { color: #8a8a8a; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <div id="fig"></div>
+      <div id="hint">Drag the point to set the initial cognition.<br />Edit the top row (a₁) of each matrix — the bottom row (a₂) fills in as 1 − a₁.</div>
+      <div id="matrices">
+        <div class="mtx">
+          <div class="mlabel">P<sup>(ID)</sup> <span>— trains the policy</span></div>
+          <table>
+            <tr><th></th><th>c₁</th><th>c₂</th><th>c₃</th></tr>
+            <tr><td class="rlab">a₁</td>
+              <td><input id="id-0" type="number" min="0" max="1" step="0.05" value="0.9" /></td>
+              <td><input id="id-1" type="number" min="0" max="1" step="0.05" value="0.1" /></td>
+              <td><input id="id-2" type="number" min="0" max="1" step="0.05" value="0.1" /></td></tr>
+            <tr><td class="rlab">a₂</td>
+              <td class="derived" id="id-d0">0.1</td><td class="derived" id="id-d1">0.9</td><td class="derived" id="id-d2">0.9</td></tr>
+          </table>
+        </div>
+        <div class="mtx">
+          <div class="mlabel">P<sup>(OOD)</sup> <span>— evaluation only</span></div>
+          <table>
+            <tr><th></th><th>c₁</th><th>c₂</th><th>c₃</th></tr>
+            <tr><td class="rlab">a₁</td>
+              <td><input id="ood-0" type="number" min="0" max="1" step="0.05" value="0.9" /></td>
+              <td><input id="ood-1" type="number" min="0" max="1" step="0.05" value="0.1" /></td>
+              <td><input id="ood-2" type="number" min="0" max="1" step="0.05" value="0.9" /></td></tr>
+            <tr><td class="rlab">a₂</td>
+              <td class="derived" id="ood-d0">0.1</td><td class="derived" id="ood-d1">0.9</td><td class="derived" id="ood-d2">0.1</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script id="rl-core">/*__CORE__*/</script>
+    <script id="rl-render">/*__RENDER__*/</script>
+    <script id="rl-data">
+      const RL_FIXTURES = __FIXTURES__;
+      const RL_PALETTE = __PALETTE__;
+    </script>
+    <script id="rl-widget">
+      (function () {
+        "use strict";
+        const Rend = RLRender, D = RLDyn, P = RL_PALETTE;
+        D.selfTest(RL_FIXTURES);
+
+        const TIME = P.sequential.time;
+        const ETA = 0.3, STEPS = 110;
+
+        // state: draggable start + editable top rows (a1) of each matrix
+        let c0 = [0.9, 0.05, 0.05];
+        let pid = [0.9, 0.1, 0.1];    // P(ID) row a1
+        let pood = [0.9, 0.1, 0.9];   // P(OOD) row a1
+
+        // ---- colour ramp (mirrors rl_dynamics.palette.ramp) ----
+        function hexToRgb(h) { h = h.replace("#", ""); return [0, 2, 4].map((i) => parseInt(h.substr(i, 2), 16)); }
+        function rgbToHex(c) { return "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join(""); }
+        function ramp(t) {
+          t = Math.min(1, Math.max(0, t));
+          const s = TIME, n = s.length - 1, f = t * n, i = Math.min(n - 1, Math.floor(f)), u = f - i;
+          const a = hexToRgb(s[i]), b = hexToRgb(s[i + 1]);
+          return rgbToHex(a.map((av, k) => av + (b[k] - av) * u));
+        }
+
+        // ---- geometry ----
+        const H = D.H, S = 150, RW = 108, RH = H * S;
+        const OX_T = 44, BAND_T = 44;
+        const OX_ID = OX_T + S + 66, OX_OOD = OX_ID + RW + 58;
+        const CB_X = OX_OOD + RW + 44, CBW = 13;
+        const BOX_W = CB_X + CBW + 50, BOX_H = BAND_T + RH + 60;
+
+        const triXY = (c) => [c[0] * D.V[0][0] + c[1] * D.V[1][0] + c[2] * D.V[2][0],
+                              c[0] * D.V[0][1] + c[1] * D.V[1][1] + c[2] * D.V[2][1]];
+        const triProj = (c) => { const xy = triXY(c); return [OX_T + xy[0] * S, BAND_T + (H - xy[1]) * S]; };
+        const triUnproj = (px, py) => [(px - OX_T) / S, H - (py - BAND_T) / S];
+
+        // ---- deterministic cognition trajectory (trained on P_ID) ----
+        function trajectory() {
+          let L = c0.map((p) => Math.log(Math.max(p, 1e-12)));
+          const Rt = pid.map((x) => 1 - x);           // effective rewards = success probs
+          const out = [D.softmax(L)];
+          for (let t = 0; t < STEPS; t++) {
+            const s = D.softmax(L);
+            L = D.logitStep(L, D.fullGradient(s, Rt), ETA, null);
+            out.push(D.softmax(L));
+          }
+          return out;
+        }
+
+        function timePath(pts, w) {
+          let s = "";
+          for (let k = 0; k < pts.length - 1; k++)
+            s += Rend.line(pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1],
+              { stroke: ramp((k + 0.5) / (pts.length - 1)), stroke_width: w, stroke_linecap: "round", stroke_linejoin: "round" });
+          return s;
+        }
+
+        function panel(ox, top, xvals, title) {
+          const edge = P.structure.edge, sec = P.ink.secondary, muted = P.ink.muted;
+          const bot = BAND_T + RH;
+          let s = Rend.text(ox + RW / 2, top - 24, title, { fill: P.ink.primary, font_size: 13, font_weight: 600, text_anchor: "middle" });
+          // bottom action axis
+          s += Rend.line(ox, bot, ox + RW, bot, { stroke: edge, stroke_width: 1.2 });
+          // short time arrow (mid-left), not touching the axis
+          const yc = BAND_T + RH / 2, ax = ox - 12;
+          s += Rend.line(ax, yc - 18, ax, yc + 14, { stroke: muted, stroke_width: 1.1 });
+          s += Rend.polygon([[ax, yc + 20], [ax - 3, yc + 13], [ax + 3, yc + 13]], { fill: muted });
+          s += Rend.text(ax - 8, yc, "time", { fill: muted, font_size: 10.5, text_anchor: "middle", dominant_baseline: "middle", transform: "rotate(-90 " + (ax - 8) + " " + yc + ")" });
+          // trajectory
+          const pts = xvals.map((x, t) => [ox + x * RW, BAND_T + (t / STEPS) * RH]);
+          s += timePath(pts, 2.6);
+          s += Rend.circle(pts[0][0], pts[0][1], 3, { fill: ramp(0), stroke: P.surface, stroke_width: 1 });
+          // x labels
+          s += Rend.text(ox, bot + 14, "a₁", { fill: sec, font_size: 11.5, text_anchor: "middle" });
+          s += Rend.text(ox + RW, bot + 14, "a₂", { fill: sec, font_size: 11.5, text_anchor: "middle" });
+          s += Rend.text(ox, bot + 27, "fail", { fill: muted, font_size: 9.5, text_anchor: "middle" });
+          s += Rend.text(ox + RW, bot + 27, "success", { fill: muted, font_size: 9.5, text_anchor: "middle" });
+          return s;
+        }
+
+        function render() {
+          const traj = trajectory();
+          const edge = P.structure.edge, sec = P.ink.secondary, muted = P.ink.muted;
+          let s = "";
+
+          // ---- cognition simplex ----
+          const V = [triProj([1, 0, 0]), triProj([0, 1, 0]), triProj([0, 0, 1])];
+          s += Rend.polygon(V, { fill: P.surface, stroke: edge, stroke_width: 1.5, stroke_linejoin: "round" });
+          s += Rend.text(OX_T + S / 2, BAND_T - 24, "Cognition", { fill: P.ink.primary, font_size: 13, font_weight: 600, text_anchor: "middle" });
+          const vlab = ["c₁", "c₂", "c₃"], voff = [[0, -13], [-9, 13], [9, 13]];
+          for (let i = 0; i < 3; i++)
+            s += Rend.text(V[i][0] + voff[i][0], V[i][1] + voff[i][1], vlab[i], { fill: sec, font_size: 12.5, font_weight: 600, text_anchor: "middle", dominant_baseline: "middle" });
+          const tp = traj.map(triProj);
+          s += timePath(tp, 2.6);
+          s += Rend.circle(tp[0][0], tp[0][1], 6.5, { fill: "none", stroke: P.surface, stroke_width: 3 });
+          s += Rend.circle(tp[0][0], tp[0][1], 5, { fill: ramp(0), stroke: P.ink.primary, stroke_width: 1.2 });
+
+          // ---- ID / OOD panels ----
+          const a2id = traj.map((c) => c.reduce((a, ck, k) => a + (1 - pid[k]) * ck, 0));
+          const a2ood = traj.map((c) => c.reduce((a, ck, k) => a + (1 - pood[k]) * ck, 0));
+          s += panel(OX_ID, BAND_T, a2id, "ID action choice");
+          s += panel(OX_OOD, BAND_T, a2ood, "OOD action choice");
+
+          // ---- colourbar ----
+          const gstops = [0, .25, .5, .75, 1].map((o) => '<stop offset="' + o + '" stop-color="' + ramp(o) + '"/>').join("");
+          s += '<defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">' + gstops + '</linearGradient></defs>';
+          s += '<rect x="' + CB_X + '" y="' + BAND_T + '" width="' + CBW + '" height="' + RH + '" fill="url(#tg)" stroke="' + edge + '" stroke-width="1" rx="' + (CBW / 2) + '" ry="' + (CBW / 2) + '"/>';
+          s += Rend.text(CB_X + CBW / 2, BAND_T - 7, "early", { fill: muted, font_size: 9.5, text_anchor: "middle" });
+          s += Rend.text(CB_X + CBW / 2, BAND_T + RH + 13, "late", { fill: muted, font_size: 9.5, text_anchor: "middle" });
+
+          stage.innerHTML = '<svg font-family="' + P.font.serif + '" viewBox="0 0 ' + BOX_W + ' ' + BOX_H + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="cognition ID vs OOD">' + s + "</svg>";
+        }
+
+        // ---- dragging the start point (only within the simplex) ----
+        const stage = document.getElementById("fig");
+        let dragging = false;
+        const svgEl = () => stage.querySelector("svg");
+        function toBox(ev) {
+          const r = svgEl().getBoundingClientRect();
+          const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+          const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
+          return [(cx - r.left) * (BOX_W / r.width), (cy - r.top) * (BOX_H / r.height)];
+        }
+        function inSimplex(px, py) {
+          const c = D.fromXY(...triUnproj(px, py));
+          return c.every((v) => v >= -0.02);
+        }
+        function setStart(ev) {
+          const [px, py] = toBox(ev);
+          c0 = D.clampToSimplex(D.fromXY(...triUnproj(px, py)));
+          render();
+        }
+        stage.addEventListener("pointerdown", (ev) => {
+          const [px, py] = toBox(ev);
+          if (!inSimplex(px, py)) return;
+          dragging = true; setStart(ev); ev.preventDefault();
+        });
+        window.addEventListener("pointermove", (ev) => { if (dragging) { setStart(ev); ev.preventDefault(); } });
+        window.addEventListener("pointerup", () => { dragging = false; });
+
+        // ---- matrix inputs ----
+        function clamp01(v) { v = parseFloat(v); return isFinite(v) ? Math.min(1, Math.max(0, v)) : 0; }
+        function bindMatrix(prefix, arr) {
+          for (let k = 0; k < 3; k++) {
+            const inp = document.getElementById(prefix + "-" + k);
+            const der = document.getElementById(prefix + "-d" + k);
+            inp.addEventListener("input", () => {
+              const raw = parseFloat(inp.value);
+              arr[k] = clamp01(inp.value);
+              if (isFinite(raw) && (raw < 0 || raw > 1)) inp.value = String(arr[k]);  // snap out-of-range back into [0,1]
+              der.textContent = (Math.round((1 - arr[k]) * 100) / 100).toString();
+              render();
+            });
+          }
+        }
+        bindMatrix("id", pid);
+        bindMatrix("ood", pood);
+
+        render();
+      })();
+    </script>
+  </body>
+</html>

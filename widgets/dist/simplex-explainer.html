@@ -9,7 +9,7 @@
       #fig {
         max-width: 480px;
         margin: 0 auto;
-        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-family: Palatino, 'Palatino Linotype', 'Average', 'Book Antiqua', Georgia, serif;
       }
       #fig svg { display: block; width: 100%; height: auto; touch-action: none; cursor: grab; }
       #fig svg.dragging { cursor: grabbing; }
@@ -306,7 +306,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = RLRender;
           s += R.circle(Pp[0], Pp[1], 7, { fill: T.ink });
 
           document.getElementById("fig").innerHTML =
-            '<svg viewBox="0 0 ' + BOX + " " + BOX + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="probability simplex">' +
+            '<svg font-family="' + P.font.serif + '" viewBox="0 0 ' + BOX + " " + BOX + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="probability simplex">' +
             s + "</svg>";
         }
 

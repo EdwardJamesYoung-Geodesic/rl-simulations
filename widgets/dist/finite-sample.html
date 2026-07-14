@@ -9,7 +9,7 @@
       #wrap {
         max-width: 500px;
         margin: 0 auto;
-        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-family: Palatino, 'Palatino Linotype', 'Average', 'Book Antiqua', Georgia, serif;
         color: #222;
       }
       #fig svg { display: block; width: 100%; height: auto; touch-action: none; cursor: grab; }
@@ -32,12 +32,12 @@
       #rewards .rboxes { display: flex; gap: 10px; }
       #rewards .rboxes label { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; }
       #rewards input[type="number"] {
-        width: 3.4em; font: 13px system-ui, sans-serif;
+        width: 3.4em; font: 13px Palatino, 'Palatino Linotype', 'Average', 'Book Antiqua', Georgia, serif;
         padding: 3px 4px; border: 1px solid #cfcfcf; border-radius: 5px;
       }
       #bar { display: flex; justify-content: flex-end; padding: 8px; }
       #replay {
-        font: 600 13px system-ui, sans-serif;
+        font: 600 13px Palatino, 'Palatino Linotype', 'Average', 'Book Antiqua', Georgia, serif;
         color: #ffffff; background: #0072B2; border: none;
         border-radius: 6px; padding: 6px 14px; cursor: pointer;
       }
@@ -363,7 +363,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = RLRender;
             stroke_linejoin: "round",
           });
           stage.innerHTML =
-            '<svg viewBox="0 0 ' + BOX + " " + BOX +
+            '<svg font-family="' + P.font.serif + '" viewBox="0 0 ' + BOX + " " + BOX +
             '" xmlns="http://www.w3.org/2000/svg" role="img" ' +
             'aria-label="finite-sample RL rollouts on the probability simplex">' +
             tri + '<g id="labels">' + labelsSVG() + '</g>' +
